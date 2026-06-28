@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="My Finance" />
+  <meta name="theme-color" content="#0A1628" />
+  <title>My Finance</title>
+
+  <!-- PWA Manifest inline -->
+  <link rel="manifest" href="data:application/manifest+json,{
+    %22name%22:%22My%20Finance%22,
+    %22short_name%22:%22Finance%22,
+    %22start_url%22:%22.%22,
+    %22display%22:%22standalone%22,
+    %22background_color%22:%22%230A1628%22,
+    %22theme_color%22:%22%230A1628%22,
+    %22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A//www.w3.org/2000/svg'%20viewBox%3D'0%200%20512%20512'%3E%3Crect%20width%3D'512'%20height%3D'512'%20rx%3D'100'%20fill%3D'%230A1628'/%3E%3Ctext%20y%3D'.9em'%20font-size%3D'400'%20x%3D'56'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22}]
+  }" />
+
+  <!-- Apple touch icon (SVG data URI) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%230A1628'/><text y='.9em' font-size='400' x='56'>💰</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #0A1628; }
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #F7F3EE;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #root { height: 100%; }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: #1E2D42; border-radius: 4px; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input::placeholder { color: #4A5F7A; }
+    input:focus { outline: none; border-color: #F5A623 !important; }
+    .sg { font-family: 'Space Grotesk', sans-serif; }
+    * { -webkit-tap-highlight-color: transparent; }
+  </style>
+
+  <!-- React + Babel from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ── Data ──────────────────────────────────────────────────────────
+const INCOME_SOURCES = [
+  { name: "Salary",    icon: "💼", color: "#34D399" },
+  { name: "Freelance", icon: "💻", color: "#60A5FA" },
+  { name: "Business",  icon: "🏢", color: "#F5A623" },
+  { name: "Interest",  icon: "🏦", color: "#A78BFA" },
+  { name: "Rental",    icon: "🏠", color: "#4ECDC4" },
+  { name: "Gift",      icon: "🎁", color: "#F472B6" },
+  { name: "Other",     icon: "➕", color: "#8B9BB4" },
+];
+
+const CATEGORIES = [
+  { name: "Fuel",                     icon: "⛽", color: "#F5A623", group: "Daily" },
+  { name: "Online Groceries",         icon: "🛒", color: "#4ECDC4", group: "Daily" },
+  { name: "In-shop Groceries",        icon: "🥬", color: "#56C078", group: "Daily" },
+  { name: "Online Food",              icon: "🍱", color: "#FF6B6B", group: "Daily" },
+  { name: "Hotel",                    icon: "🏨", color: "#FFD93D", group: "Lifestyle" },
+  { name: "Travel",                   icon: "✈️", color: "#60A5FA", group: "Lifestyle" },
+  { name: "Shopping",                 icon: "🛍️", color: "#A78BFA", group: "Lifestyle" },
+  { name: "Entertainment",            icon: "🎬", color: "#F472B6", group: "Lifestyle" },
+  { name: "House Rent & Maintenance", icon: "🏠", color: "#FB923C", group: "Fixed" },
+  { name: "Credit Card Bills",        icon: "💳", color: "#E8685A", group: "Fixed" },
+  { name: "Loans",                    icon: "🏦", color: "#94A3B8", group: "Fixed" },
+  { name: "Savings",                  icon: "🪙", color: "#34D399", group: "Wealth" },
+  { name: "Investments",              icon: "📈", color: "#818CF8", group: "Wealth" },
+];
+const GROUPS = ["Daily", "Lifestyle", "Fixed", "Wealth"];
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fmt = (v) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Math.abs(v));
+const fmtDate = (d) =>
+  new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const monthStr = () => new Date().toISOString().slice(0, 7);
+
+// ── Animated Ring ─────────────────────────────────────────────────
+function Ring({ value, max, color, size = 130 }) {
+  const stroke = 10;
+  const r = size / 2 - stroke;
+  const circ = 2 * Math.PI * r;
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const [anim, setAnim] = useState(0);
+  const raf = useRef(null);
+  useEffect(() => {
+    let start = null;
+    const target = pct;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / 900, 1);
+      setAnim(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf.current);
+  }, [pct]);
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1E2D42" strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - anim)}
+        strokeLinecap="round" style={{ transition: "stroke 0.4s" }} />
+    </svg>
+  );
+}
+
+// ── Transaction Row ───────────────────────────────────────────────
+function TxnRow({ t, onDel }) {
+  const isInc = t.type === "income";
+  const cat = isInc
+    ? (INCOME_SOURCES.find(s => s.name === t.category) || INCOME_SOURCES[6])
+    : (CATEGORIES.find(c => c.name === t.category) || CATEGORIES[0]);
+  return (
+    <div style={{ background: "#131F30", borderRadius: 14, padding: "13px 15px", display: "flex", alignItems: "center", gap: 12, marginBottom: 8, border: "1px solid #1E2D42" }}>
+      <div style={{ width: 42, height: 42, borderRadius: 12, background: cat.color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+        {cat.icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 500, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.note}</div>
+        <div style={{ fontSize: 11, color: "#8B9BB4", marginTop: 3 }}>{t.category} · {fmtDate(t.date)}</div>
+      </div>
+      <div className="sg" style={{ fontWeight: 700, fontSize: 15, color: isInc ? "#34D399" : "#E8685A", flexShrink: 0 }}>
+        {isInc ? "+" : "−"}{fmt(t.amount)}
+      </div>
+      <button onClick={() => onDel(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#4A5F7A", fontSize: 18, padding: "4px 4px 4px 8px", flexShrink: 0, lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
+
+// ── Add Sheet ─────────────────────────────────────────────────────
+function AddSheet({ type, amount, setAmount, note, setNote, category, setCategory, incSource, setIncSource, txnDate, setTxnDate, onSave, onClose }) {
+  const isInc = type === "income";
+  const accent = isInc ? "#34D399" : "#E8685A";
+  return (
+    <div style={{ background: "#111D2E", borderTop: "1px solid #1E2D42", padding: "20px 20px 40px", maxHeight: "88vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: accent + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+            {isInc ? "💚" : "🔴"}
+          </div>
+          <div className="sg" style={{ fontWeight: 700, fontSize: 17, color: accent }}>Add {isInc ? "Income" : "Expense"}</div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#8B9BB4", cursor: "pointer", fontSize: 24, lineHeight: 1, padding: 4 }}>×</button>
+      </div>
+
+      {/* Amount */}
+      <div style={{ position: "relative", marginBottom: 12 }}>
+        <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "#8B9BB4", fontSize: 22, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700 }}>₹</span>
+        <input type="number" inputMode="decimal" placeholder="0" value={amount}
+          onChange={e => setAmount(e.target.value)} autoFocus
+          style={{ width: "100%", padding: "16px 16px 16px 44px", background: "#0A1628", border: "2px solid #1E2D42", borderRadius: 14, color: "#F7F3EE", fontSize: 30, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700 }} />
+      </div>
+
+      {/* Note */}
+      <input type="text" placeholder="Note (optional)" value={note} onChange={e => setNote(e.target.value)}
+        style={{ width: "100%", padding: "13px 15px", background: "#0A1628", border: "2px solid #1E2D42", borderRadius: 12, color: "#F7F3EE", fontSize: 15, marginBottom: 12 }} />
+
+      {/* Date */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#4A5F7A", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Date</div>
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, pointerEvents: "none" }}>📅</span>
+          <input type="date" value={txnDate} max={todayStr()} onChange={e => setTxnDate(e.target.value)}
+            style={{ width: "100%", padding: "13px 14px 13px 44px", background: "#0A1628", border: "2px solid #1E2D42", borderRadius: 12, color: "#F7F3EE", fontSize: 15, fontFamily: "Inter,sans-serif", colorScheme: "dark" }} />
+        </div>
+      </div>
+
+      {/* Category / Source */}
+      {isInc ? (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: "#4A5F7A", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Source</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {INCOME_SOURCES.map(s => {
+              const sel = incSource === s.name;
+              return (
+                <button key={s.name} onClick={() => setIncSource(s.name)} style={{
+                  padding: "9px 14px", borderRadius: 10, border: `2px solid ${sel ? s.color : "#1E2D42"}`,
+                  background: sel ? s.color + "22" : "transparent", color: sel ? s.color : "#8B9BB4",
+                  cursor: "pointer", fontSize: 14, fontFamily: "Inter,sans-serif", fontWeight: sel ? 600 : 400,
+                  display: "flex", alignItems: "center", gap: 6
+                }}>{s.icon} {s.name}</button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        GROUPS.map(g => (
+          <div key={g} style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "#4A5F7A", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>{g}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {CATEGORIES.filter(c => c.group === g).map(c => {
+                const sel = category === c.name;
+                return (
+                  <button key={c.name} onClick={() => setCategory(c.name)} style={{
+                    padding: "8px 12px", borderRadius: 10, border: `2px solid ${sel ? c.color : "#1E2D42"}`,
+                    background: sel ? c.color + "22" : "transparent", color: sel ? c.color : "#8B9BB4",
+                    cursor: "pointer", fontSize: 12, fontFamily: "Inter,sans-serif", fontWeight: sel ? 600 : 400,
+                    display: "flex", alignItems: "center", gap: 5
+                  }}>{c.icon} {c.name.length > 16 ? c.name.slice(0,15) + "…" : c.name}</button>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
+
+      <button onClick={onSave} style={{ width: "100%", marginTop: 16, padding: "17px", borderRadius: 14, border: "none", background: accent, color: isInc ? "#0A1628" : "#fff", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 17, cursor: "pointer" }}>
+        Save {isInc ? "Income" : "Expense"}
+      </button>
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────
+function App() {
+  const [transactions, setTransactions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("txns_v2") || "[]"); } catch { return []; }
+  });
+  const [view, setView]           = useState("dashboard");
+  const [adding, setAdding]       = useState(null);
+  const [amount, setAmount]       = useState("");
+  const [note, setNote]           = useState("");
+  const [category, setCategory]   = useState(CATEGORIES[0].name);
+  const [incSource, setIncSource] = useState(INCOME_SOURCES[0].name);
+  const [filterType, setFilterType] = useState("All");
+  const [filterCat,  setFilterCat]  = useState("All");
+  const [txnDate, setTxnDate]     = useState(todayStr());
+
+  useEffect(() => {
+    localStorage.setItem("txns_v2", JSON.stringify(transactions));
+  }, [transactions]);
+
+  // ── Computed ──
+  const monthTxns    = transactions.filter(t => t.date.startsWith(monthStr()));
+  const todayTxns    = transactions.filter(t => t.date === todayStr());
+  const totalIncome  = transactions.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
+  const balance      = totalIncome - totalExpense;
+  const monthIncome  = monthTxns.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
+  const monthExpense = monthTxns.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
+  const monthBalance = monthIncome - monthExpense;
+  const todayIncome  = todayTxns.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
+  const todayExpense = todayTxns.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
+
+  const spendPct  = monthIncome > 0 ? Math.min(monthExpense / monthIncome, 1) : 0;
+  const ringColor = spendPct > 0.9 ? "#E8685A" : spendPct > 0.7 ? "#F5A623" : "#34D399";
+
+  const catBreakdown = CATEGORIES.map(c => ({
+    ...c, total: monthTxns.filter(t => t.type === "expense" && t.category === c.name).reduce((s,t) => s + t.amount, 0)
+  })).filter(c => c.total > 0).sort((a,b) => b.total - a.total);
+
+  const allDates = [...new Set(transactions.map(t => t.date))].sort((a,b) => b.localeCompare(a));
+  const filtered = transactions.filter(t => {
+    if (filterType === "Income"  && t.type !== "income")  return false;
+    if (filterType === "Expense" && t.type !== "expense") return false;
+    if (filterCat  !== "All"    && t.category !== filterCat) return false;
+    return true;
+  });
+
+  const openAdd = (type) => {
+    setAdding(type);
+    setAmount(""); setNote("");
+    setCategory(CATEGORIES[0].name);
+    setIncSource(INCOME_SOURCES[0].name);
+    setTxnDate(todayStr());
+  };
+
+  const save = () => {
+    const val = parseFloat(amount);
+    if (!val || val <= 0) return;
+    const isInc = adding === "income";
+    setTransactions(prev => [{
+      id: Date.now(), type: isInc ? "income" : "expense", amount: val,
+      note: note.trim() || (isInc ? incSource : category),
+      category: isInc ? incSource : category, date: txnDate,
+    }, ...prev]);
+    setAmount(""); setNote(""); setAdding(null);
+  };
+
+  const del = (id) => setTransactions(prev => prev.filter(t => t.id !== id));
+  const isOpen = adding !== null;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0A1628", color: "#F7F3EE", paddingBottom: isOpen ? 0 : 100 }}>
+
+      {/* ── TOP NAV ── */}
+      <div style={{ padding: "20px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div className="sg" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.5px" }}>My Finance</div>
+          <div style={{ fontSize: 12, color: "#8B9BB4", marginTop: 2 }}>
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+          </div>
+        </div>
+        <div style={{ display: "flex", background: "#1A2A3E", borderRadius: 10, padding: 3, gap: 2 }}>
+          {[["dashboard","📊"],["history","📋"]].map(([v, ic]) => (
+            <button key={v} onClick={() => setView(v)} style={{ padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer", background: view === v ? "#0A1628" : "transparent", color: view === v ? "#F7F3EE" : "#8B9BB4", fontSize: 17 }}>{ic}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ══ DASHBOARD ══ */}
+      {view === "dashboard" && (
+        <div style={{ paddingBottom: 20 }}>
+
+          {/* Balance Card */}
+          <div style={{ margin: "18px 20px 0", background: "linear-gradient(135deg,#1A2A3E,#162035)", borderRadius: 24, padding: "22px", border: "1px solid #1E2D42" }}>
+            <div style={{ fontSize: 11, color: "#8B9BB4", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Total Balance</div>
+            <div className="sg" style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-1.5px", color: balance >= 0 ? "#34D399" : "#E8685A" }}>
+              {balance < 0 ? "−" : ""}{fmt(balance)}
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
+              <div style={{ flex: 1, background: "#0A1628", borderRadius: 14, padding: "13px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399" }} />
+                  <div style={{ fontSize: 11, color: "#8B9BB4" }}>Total Income</div>
+                </div>
+                <div className="sg" style={{ fontSize: 17, fontWeight: 700, color: "#34D399" }}>{fmt(totalIncome)}</div>
+              </div>
+              <div style={{ flex: 1, background: "#0A1628", borderRadius: 14, padding: "13px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#E8685A" }} />
+                  <div style={{ fontSize: 11, color: "#8B9BB4" }}>Total Spent</div>
+                </div>
+                <div className="sg" style={{ fontSize: 17, fontWeight: 700, color: "#E8685A" }}>{fmt(totalExpense)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Month Ring */}
+          <div style={{ margin: "12px 20px 0", background: "#131F30", borderRadius: 20, padding: "18px", border: "1px solid #1E2D42" }}>
+            <div className="sg" style={{ fontWeight: 600, fontSize: 13, marginBottom: 14 }}>This Month</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <Ring value={monthExpense} max={Math.max(monthIncome,1)} color={ringColor} size={120} />
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                  <div className="sg" style={{ fontSize: 14, fontWeight: 700, color: ringColor }}>{Math.round(spendPct*100)}%</div>
+                  <div style={{ fontSize: 10, color: "#8B9BB4" }}>spent</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+                {[["Income", monthIncome, "#34D399"], ["Expenses", monthExpense, "#E8685A"], ["Balance", monthBalance, monthBalance >= 0 ? "#60A5FA" : "#F5A623"]].map(([label, val, color]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, color: "#8B9BB4", marginBottom: 2 }}>{label}</div>
+                    <div className="sg" style={{ fontSize: 17, fontWeight: 700, color }}>
+                      {label === "Balance" ? (val < 0 ? "−" : "+") : ""}{fmt(val)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Today Strip */}
+          <div style={{ margin: "10px 20px 0", display: "flex", gap: 8 }}>
+            {[["Today In", todayIncome, "#34D399"], ["Today Out", todayExpense, "#E8685A"], ["Net", todayIncome - todayExpense, (todayIncome-todayExpense) >= 0 ? "#60A5FA" : "#F5A623"]].map(([label, val, color]) => (
+              <div key={label} style={{ flex: 1, background: "#131F30", borderRadius: 14, padding: "12px 10px", border: "1px solid #1E2D42" }}>
+                <div style={{ fontSize: 10, color: "#8B9BB4", marginBottom: 4 }}>{label}</div>
+                <div className="sg" style={{ fontWeight: 700, fontSize: 13, color }}>
+                  {label === "Net" && val !== 0 ? (val < 0 ? "−" : "+") : ""}{fmt(val)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Category breakdown */}
+          {catBreakdown.length > 0 && (
+            <div style={{ margin: "14px 0 0" }}>
+              <div style={{ padding: "0 20px", marginBottom: 10 }}>
+                <div className="sg" style={{ fontWeight: 600, fontSize: 12, color: "#8B9BB4" }}>Where money went this month</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, padding: "0 20px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                {catBreakdown.map(c => (
+                  <div key={c.name} style={{ background: "#131F30", borderRadius: 14, padding: "12px 14px", minWidth: 100, flexShrink: 0, border: "1px solid #1E2D42" }}>
+                    <div style={{ fontSize: 22 }}>{c.icon}</div>
+                    <div style={{ fontSize: 10, color: "#8B9BB4", marginTop: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 86 }}>{c.name}</div>
+                    <div className="sg" style={{ fontWeight: 700, fontSize: 14, color: c.color, marginTop: 2 }}>{fmt(c.total)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent */}
+          {transactions.length > 0 && (
+            <div style={{ margin: "14px 20px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div className="sg" style={{ fontWeight: 600, fontSize: 12, color: "#8B9BB4" }}>Recent</div>
+                <button onClick={() => setView("history")} style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 13, cursor: "pointer", fontFamily: "Inter,sans-serif" }}>See all →</button>
+              </div>
+              {transactions.slice(0,5).map(t => <TxnRow key={t.id} t={t} onDel={del} />)}
+            </div>
+          )}
+
+          {transactions.length === 0 && (
+            <div style={{ textAlign: "center", padding: "60px 20px 0", color: "#4A5F7A" }}>
+              <div style={{ fontSize: 52 }}>💰</div>
+              <div className="sg" style={{ marginTop: 14, fontSize: 17, color: "#8B9BB4" }}>No transactions yet</div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>Tap + Income or − Expense to start</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ HISTORY ══ */}
+      {view === "history" && (
+        <div style={{ padding: "16px 20px 0" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {["All","Income","Expense"].map(f => (
+              <button key={f} onClick={() => { setFilterType(f); setFilterCat("All"); }} style={{
+                padding: "9px 16px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 13,
+                fontFamily: "Inter,sans-serif", fontWeight: filterType === f ? 600 : 400,
+                background: filterType === f ? (f==="Income" ? "#34D399" : f==="Expense" ? "#E8685A" : "#F5A623") : "#1A2A3E",
+                color: filterType === f ? "#0A1628" : "#8B9BB4",
+              }}>{f}</button>
+            ))}
+          </div>
+          {filterType !== "Income" && (
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 12, WebkitOverflowScrolling: "touch" }}>
+              {["All", ...CATEGORIES.map(c => c.name)].map(name => {
+                const cat = CATEGORIES.find(c => c.name === name);
+                const active = filterCat === name;
+                return (
+                  <button key={name} onClick={() => setFilterCat(name)} style={{
+                    display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 10, flexShrink: 0,
+                    border: `2px solid ${active && cat ? cat.color : active ? "#F5A623" : "#1E2D42"}`,
+                    background: active ? (cat ? cat.color+"22" : "#F5A62322") : "transparent",
+                    color: active ? (cat?.color || "#F5A623") : "#8B9BB4",
+                    cursor: "pointer", fontSize: 12, fontFamily: "Inter,sans-serif", fontWeight: active ? 600 : 400, whiteSpace: "nowrap"
+                  }}>
+                    {cat ? cat.icon : "🗂"} {name.length > 14 ? name.slice(0,13)+"…" : name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {allDates.length === 0
+            ? <div style={{ textAlign: "center", padding: "50px 0", color: "#4A5F7A" }}><div style={{ fontSize: 40 }}>📋</div><div style={{ marginTop: 12, fontSize: 14 }}>No transactions yet</div></div>
+            : allDates.map(date => {
+                const dayTxns = filtered.filter(t => t.date === date);
+                if (!dayTxns.length) return null;
+                const dayIn  = dayTxns.filter(t => t.type==="income").reduce((s,t) => s+t.amount, 0);
+                const dayOut = dayTxns.filter(t => t.type==="expense").reduce((s,t) => s+t.amount, 0);
+                return (
+                  <div key={date} style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#8B9BB4", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        {date === todayStr() ? "Today" : fmtDate(date)}
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        {dayIn  > 0 && <span className="sg" style={{ fontSize: 12, fontWeight: 600, color: "#34D399" }}>+{fmt(dayIn)}</span>}
+                        {dayOut > 0 && <span className="sg" style={{ fontSize: 12, fontWeight: 600, color: "#E8685A" }}>−{fmt(dayOut)}</span>}
+                      </div>
+                    </div>
+                    {dayTxns.map(t => <TxnRow key={t.id} t={t} onDel={del} />)}
+                  </div>
+                );
+              })
+          }
+        </div>
+      )}
+
+      {/* ── FAB / Add Sheet ── */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200 }}>
+        {!isOpen ? (
+          <div style={{ padding: "0 20px 32px", display: "flex", gap: 10, background: "linear-gradient(to top, #0A1628 60%, transparent)" }}>
+            <button onClick={() => openAdd("income")} style={{ flex: 1, padding: "16px", borderRadius: 16, border: "none", background: "#34D399", color: "#0A1628", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>
+              + Income
+            </button>
+            <button onClick={() => openAdd("expense")} style={{ flex: 1, padding: "16px", borderRadius: 16, border: "none", background: "#E8685A", color: "#fff", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>
+              − Expense
+            </button>
+          </div>
+        ) : (
+          <AddSheet
+            type={adding}
+            amount={amount} setAmount={setAmount}
+            note={note} setNote={setNote}
+            category={category} setCategory={setCategory}
+            incSource={incSource} setIncSource={setIncSource}
+            txnDate={txnDate} setTxnDate={setTxnDate}
+            onSave={save} onClose={() => setAdding(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<!-- Service Worker for offline support -->
+<script>
+if ('serviceWorker' in navigator) {
+  const SW_CODE = `
+    const CACHE = 'myfinance-v1';
+    const ASSETS = [
+      self.location.pathname,
+      'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap',
+    ];
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {}));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => {
+      e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(
+        caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
+          return resp;
+        }).catch(() => cached))
+      );
+    });
+  `;
+  const blob = new Blob([SW_CODE], { type: 'application/javascript' });
+  const url  = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(url).catch(() => {});
+}
+</script>
+</body>
+</html>
